@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText:  PyPSA-Earth and PyPSA-Eur Authors
+#
+# SPDX-License-Identifier: CC0-1.0
+
+setuptools
+sphinx
+sphinx_book_theme
+sphinxcontrib-bibtex
+myst-parser  # recommark is deprecated, https://stackoverflow.com/a/71660856/13573820
+sphinx-copybutton
+
+pypsa >=0.25, <=0.30
+vresutils>=0.3.1
+powerplantmatching>=0.5.19
+atlite>=0.4.1
+dask[distributed]
+matplotlib
+tabula-py
+
+cartopy
+scikit-learn
+pycountry
+pyyaml
+seaborn
+memory_profiler
+tables
+descartes
+
+rioxarray
+googledrivedownloader>=1.1
+
+gitpython
+
+chaospy
+numba
+ruamel.yaml<=0.17.26
+earth-osm>=2.3.post1
+reverse-geocode
+pyDOE2
+graphviz
+
+fake_useragent
+currencyconverter
