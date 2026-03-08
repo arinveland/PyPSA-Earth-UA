@@ -8,15 +8,13 @@ def main(snakemake):
     gadm_path = Path(snakemake.input.gadm)
     network_out = Path(snakemake.output.network)
 
+    cfg = snakemake.config.get("drop_occupied", {})
+    if not cfg.get("enable", False):
+        n.export_to_netcdf(snakemake.output["network"])
+        raise SystemExit()
+
     # GADM IDs of occupied regions to remove 
-    banned_gadm_ids = [
-        "UA.15_1",  # Luhansk
-        "UA.6_1",   # Donetsk
-        "UA.26_1",  # Zaporizhzhia
-        "UA.9_1",   # Kherson
-        "UA.4_1",   # Crimea
-        "UA.20_1",  # Sevastopol
-    ]
+    occupied_ids = cfg.get("occupied_ids", [])
 
     print(f"[drop_occupied] Reading network: {network_in}")
     n = pypsa.Network(network_in)
@@ -32,14 +30,14 @@ def main(snakemake):
             f"[drop_occupied] 'GADM_ID' not in GADM file columns: {list(gadm.columns)}"
         )
 
-    banned = gadm[gadm["GADM_ID"].isin(banned_gadm_ids)].copy()
-    if banned.empty:
+    occupied = gadm[gadm["GADM_ID"].isin(occupied_ids)].copy()
+    if occupied.empty:
         raise ValueError(
-            f"[drop_occupied] No polygons found for banned IDs: {banned_gadm_ids}"
+            f"[drop_occupied] No polygons found for occupied IDs: {occupied_ids}"
         )
 
-    print("[drop_occupied] Banned polygons:",
-          ", ".join(sorted(banned["GADM_ID"].unique())))
+    print("[drop_occupied] Occupied polygons:",
+          ", ".join(sorted(occupied["GADM_ID"].unique())))
 
     # build GeoDataFrame of all buses  
     buses_df = n.buses.copy()
@@ -49,15 +47,15 @@ def main(snakemake):
         crs="EPSG:4326",
     )
 
-    # spatial join: which buses lie inside banned oblasts
-    buses_in_banned = gpd.sjoin(
+    # spatial join: which buses lie inside occupied oblasts
+    buses_in_occupied = gpd.sjoin(
         buses_gdf,
-        banned[["geometry"]],
+        occupied[["geometry"]],
         how="inner",
         predicate="within",
     )
 
-    buses_to_drop = buses_in_banned.index.unique().tolist()
+    buses_to_drop = buses_in_occupied.index.unique().tolist()
     print(f"[drop_occupied] Found {len(buses_to_drop)} buses to drop.")
 
     # remove relevant buses (cascade-deletes attached components) 

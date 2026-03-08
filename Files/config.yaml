@@ -1,0 +1,23 @@
+drop_occupied:
+  enable: true
+  occupied_ids: [
+      "UA.15_1",  # Luhansk
+      "UA.6_1",   # Donetsk
+      "UA.26_1",  # Zaporizhzhia
+      "UA.9_1",   # Kherson
+      "UA.4_1",   # Crimea
+      "UA.20_1",  # Sevastopol
+  ] # List of GADM IDs
+
+cross_border:
+  enable: false
+  carrier: cross-border
+  ntc_gw: 1.6
+  marginal_cost: 60
+  p_nom_mw: 1000000
+  buses: ["89", "55", "1469"] # Default buses near EU neighbours
+
+outages:
+  enable: false
+  buses: []     # bus IDs as strings 
+  lines: []      # line IDs as strings 
