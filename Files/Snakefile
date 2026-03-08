@@ -1,0 +1,24 @@
+rule ua_drop_occupied_network:
+    input:
+        network="networks/" + RDIR + "elec_s{simpl}_{clusters}_ec_l{ll}_{opts}.nc",
+        gadm="resources/" + RDIR + "shapes/gadm_shapes.geojson"
+    output:
+        network="networks/" + RDIR + "elec_s{simpl}_{clusters}_ec_l{ll}_{opts}_pruned.nc"
+    script:
+        "scripts/drop_occupied.py"
+
+rule ua_add_cross_border_imports:
+    input:
+        network="networks/" + RDIR + "elec_s{simpl}_{clusters}_ec_l{ll}_{opts}_pruned.nc"
+    output:
+        network="networks/" + RDIR + "elec_s{simpl}_{clusters}_ec_l{ll}_{opts}_xborder.nc"
+    script:
+        "scripts/add_cross_border_imports.py"
+
+rule ua_apply_outages:
+    input:
+        network="networks/" + RDIR + "elec_s{simpl}_{clusters}_ec_l{ll}_{opts}_xborder.nc"
+    output:
+        network="networks/" + RDIR + "elec_s{simpl}_{clusters}_ec_l{ll}_{opts}_xborder_outaged.nc"
+    script:
+        "scripts/apply_outages.py"
