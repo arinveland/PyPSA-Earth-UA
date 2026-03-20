@@ -2,3 +2,4 @@
 Files/testing.ipynb
 pruned_damages.nc
 pruned.nc
+.snakemake
