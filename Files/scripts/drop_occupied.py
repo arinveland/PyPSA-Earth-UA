@@ -7,17 +7,17 @@ def main(snakemake):
     network_in = Path(snakemake.input.network)
     gadm_path = Path(snakemake.input.gadm)
     network_out = Path(snakemake.output.network)
+    n = pypsa.Network(network_in)
 
     cfg = snakemake.config.get("drop_occupied", {})
     if not cfg.get("enable", False):
-        n.export_to_netcdf(snakemake.output["network"])
+        n.export_to_netcdf(network_out)
         raise SystemExit()
 
     # GADM IDs of occupied regions to remove 
     occupied_ids = cfg.get("occupied_ids", [])
 
     print(f"[drop_occupied] Reading network: {network_in}")
-    n = pypsa.Network(network_in)
 
     print(f"[drop_occupied] Reading GADM shapes: {gadm_path}")
     gadm = gpd.read_file(gadm_path)
@@ -83,7 +83,15 @@ def main(snakemake):
         orphan_idx = df.index[orphan_mask]
         if len(orphan_idx):
             print(f"[drop_occupied] Dropping {len(orphan_idx)} {component} with invalid buses")
-            n.mremove(component[:-1].capitalize(), orphan_idx.tolist())
+            component_map = {
+                "lines": "Line",
+                "links": "Link",
+                "generators": "Generator",
+                "loads": "Load",
+                "stores": "Store",
+                "storage_units": "StorageUnit",
+            }
+            n.mremove(component_map[component], orphan_idx.tolist())
 
     # lines and links
     drop_orphan_components("lines", ["bus0", "bus1"])

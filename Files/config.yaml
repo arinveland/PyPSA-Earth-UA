@@ -9,6 +9,40 @@ drop_occupied:
       "UA.20_1",  # Sevastopol
   ] # List of GADM IDs
 
+generation_war_damages:
+  enable: true
+  damage_percentage_by_carrier: [ 
+    nuclear: 0, # Occupied infrastructure is handled by a separate rule
+    thermal: 0.69,
+    CCGT: 0.5,
+    hydro: 0.5,
+    wind: 0,
+    solar: 0,
+  ] # Current values are based on eye measurements from a figure where the shares were not marked explicitly, needs to be verified more thoroughly
+  damage_distribution: [
+    UA.5_1: 0.27, # Dnipropetrovsk
+    UA.8_1: 0.19, # Kharkiv
+    UA.21_1: 0.10, # Sumy
+    UA.2_1: 0.07, # Chernihiv
+    UA.17_1: 0.06, # Odesa
+    UA.16_1: 0.06, # Mykolaiv
+    UA.18_1: 0.05, # Poltava
+    UA.11_1: 0.03, # Kyiv City
+    UA.12_1: 0.03, # Kyiv Oblast
+    UA.14_1: 0.02, # Lviv
+    UA.1_1: 0.02, # Cherkasy
+    UA.13_1: 0.02, # Kirohovhrad
+    UA.24_1: 0.01, # Vinnytsia
+    UA.7_1: 0.01, # Ivano-Frankivsk
+    UA.27_1: 0.01, # Zhytomyr
+    UA.19_1: 0.01, # Rivne
+    UA.10_1: 0.01, # Khmenlytskyi
+    UA.22_1: 0.01, # Ternopil
+    UA.3_1: 0.01, # Chernivtsi
+    UA.25_1: 0.01, # Volyn
+    UA.23_1: 0.00, # Zakarpattia
+  ] # Values should add up to 1
+
 cross_border:
   enable: false
   carrier: cross-border
