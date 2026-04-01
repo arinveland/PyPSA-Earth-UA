@@ -18,9 +18,18 @@ rule ua_apply_generation_damages:
     script:
         "Files/scripts/apply_generation_damages.py"
 
+rule ua_adjust_loads:
+    input:
+        network="Files/networks/pruned_damages.nc",
+        gadm="Files/shapes/gadm_shapes.geojson"
+    output:
+        network="Files/networks/pruned_loads.nc"
+    script:
+        "Files/scripts/adjust_loads.py"
+
 rule ua_add_cross_border_imports:
     input:
-        network="Files/networks/pruned_damages.nc"
+        network="Files/networks/pruned_loads.nc"
     output:
         network="Files/networks/xborder.nc"
     script:

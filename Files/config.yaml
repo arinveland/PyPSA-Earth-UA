@@ -43,6 +43,81 @@ generation_war_damages:
     UA.23_1: 0.00, # Zakarpattia
   ] # Values should add up to 1
 
+load_adjustment:
+  enable: true
+
+  base_industrial_loads: [ 
+    UA.5_1: 22.01, # Dnipropetrovsk
+    UA.8_1: 3.6, # Kharkiv
+    UA.21_1: 1.20, # Sumy
+    UA.2_1: 0.79, # Chernihiv
+    UA.17_1: 2.32, # Odesa
+    UA.16_1: 3.30, # Mykolaiv
+    UA.18_1: 3.82, # Poltava
+    UA.11_1: 5.55, # Kyiv City
+    UA.12_1: 3.01, # Kyiv Oblast
+    UA.14_1: 2.3, # Lviv
+    UA.1_1: 1.77, # Cherkasy
+    UA.13_1: 2.28, # Kirohovhrad
+    UA.24_1: 1.73, # Vinnytsia
+    UA.7_1: 2.58, # Ivano-Frankivsk
+    UA.27_1: 1.27, # Zhytomyr
+    UA.19_1: 2.68, # Rivne
+    UA.10_1: 1.71, # Khmenlytskyi
+    UA.22_1: 0.42, # Ternopil
+    UA.3_1: 1.90, # Chernivtsi
+    UA.25_1: 0.68, # Volyn
+    UA.23_1: 0.44, # Zakarpattia
+  ] # Values are in TWh
+
+  industrial_adjustment_coefficients: [
+    UA.5_1: 0.53, # Dnipropetrovsk
+    UA.8_1: 0.50, # Kharkiv
+    UA.21_1: 0.51, # Sumy
+    UA.2_1: 0.29, # Chernihiv
+    UA.17_1: 0.54, # Odesa
+    UA.16_1: 0.44, # Mykolaiv
+    UA.18_1: 0.56, # Poltava
+    UA.11_1: 0.67, # Kyiv City
+    UA.12_1: 0.69, # Kyiv Oblast
+    UA.14_1: 0.85, # Lviv
+    UA.1_1: 0.70, # Cherkasy
+    UA.13_1: 0.63, # Kirohovhrad
+    UA.24_1: 0.68, # Vinnytsia
+    UA.7_1: 0.53, # Ivano-Frankivsk
+    UA.27_1: 0.64, # Zhytomyr
+    UA.19_1: 0.67, # Rivne
+    UA.10_1: 0.60, # Khmenlytskyi
+    UA.22_1: 0.67, # Ternopil
+    UA.3_1: 0.78, # Chernivtsi
+    UA.25_1: 0.80, # Volyn
+    UA.23_1: 0.68, # Zakarpattia
+  ] # Coefficients used to adjust the base industrial loads
+
+  population_adjustment_coefficients: [
+    UA.5_1: 1.10, # Dnipropetrovsk
+    UA.8_1: 0.96, # Kharkiv
+    UA.21_1: 1.00, # Sumy
+    UA.2_1: 1.19, # Chernihiv
+    UA.17_1: 0.88, # Odesa
+    UA.16_1: 1.02, # Mykolaiv
+    UA.18_1: 0.92, # Poltava
+    UA.11_1: 1.09, # Kyiv City
+    UA.12_1: 1.32, # Kyiv Oblast
+    UA.14_1: 0.73, # Lviv
+    UA.1_1: 0.92, # Cherkasy
+    UA.13_1: 0.94, # Kirohovhrad
+    UA.24_1: 0.85, # Vinnytsia
+    UA.7_1: 1.04, # Ivano-Frankivsk
+    UA.27_1: 0.84, # Zhytomyr
+    UA.19_1: 0.9, # Rivne
+    UA.10_1: 0.9, # Khmenlytskyi
+    UA.22_1: 1.04, # Ternopil
+    UA.3_1: 1.12, # Chernivtsi
+    UA.25_1: 1.04, # Volyn
+    UA.23_1: 1.2, # Zakarpattia
+  ] # Coefficients used to adjust the base household loads
+
 cross_border:
   enable: false
   carrier: cross-border
