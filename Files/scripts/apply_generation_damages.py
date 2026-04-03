@@ -5,7 +5,6 @@ import pypsa
 
 
 EPS = 1e-9
-REGIONAL_SHARE_TOLERANCE = 0.70
 
 
 def _normalize_token(value):
@@ -24,12 +23,15 @@ def _validate_fraction(name, value):
 # Alias map for config keys -> possible carrier labels in the network.
 GROUP_ALIASES = {
 	"nuclear": {"nuclear"},
-	"thermal": {"thermal", "coal", "hardcoal", "oil", "lignite", "ocgt"},
-	"ccgt": {"ccgt", "combinedcyclegasturbine"},
-	"hydro": {"hydro", "psp", "pshp", "ror", "runofriver"},
+	"thermal": {"coal", "oil"},
+	"ccgt": {"ccgt"},
+	"hydro": {"hydro"},
+	"phs": {"PHS", "phs"},
 	"wind": {"wind", "onwind", "offwindac", "offwinddc"},
 	"solar": {"solar", "pv", "solarpv"},
 }
+
+STORAGEUNIT_GROUPS = {"hydro", "phs"}
 
 
 def _coerce_mapping(name, value):
@@ -216,6 +218,187 @@ def _bus_region_mapping(network, gadm_path, configured_regions):
 	return dict(zip(joined["bus_id"], joined["GADM_ID"]))
 
 
+def _max_feasible_lower_for_region(
+	group_names,
+	region_ids,
+	group_targets,
+	region_lowers,
+	region_uppers,
+	cell_caps,
+	target_region,
+):
+	base = dict(region_lowers)
+	lo = 0.0
+	hi = float(region_uppers[target_region])
+
+	for _ in range(28):
+		mid = 0.5 * (lo + hi)
+		trial_lowers = dict(base)
+		trial_lowers[target_region] = mid
+
+		if sum(trial_lowers.values()) > sum(group_targets[g] for g in group_names) + 1e-6:
+			hi = mid
+			continue
+
+		trial = _solve_bipartite_with_region_bounds(
+			group_names=group_names,
+			region_ids=region_ids,
+			group_targets=group_targets,
+			region_lowers=trial_lowers,
+			region_uppers=region_uppers,
+			cell_caps=cell_caps,
+		)
+		if trial is None:
+			hi = mid
+		else:
+			lo = mid
+
+	return lo
+
+
+def _repair_region_shares_with_slack(
+	group_names,
+	region_ids,
+	group_targets,
+	region_shares,
+	total_removed_target,
+	region_uppers,
+	cell_caps,
+):
+	shares = {r: float(region_shares[r]) for r in region_ids}
+	max_iterations = max(1, len(region_ids) * len(region_ids) * 6)
+	iteration = 0
+
+	while True:
+		if iteration >= max_iterations:
+			raise ValueError(
+				"Failed to repair regional shares: iteration limit exceeded while trimming "
+				"infeasible lower bounds."
+			)
+
+		region_lowers = {
+			r: max(0.0, shares[r] * total_removed_target)
+			for r in region_ids
+		}
+
+		# First, trim any region that exceeds its direct upper bound.
+		trimmed_share_total = 0.0
+		for src in sorted(region_ids):
+			upper = region_uppers[src]
+			if region_lowers[src] <= upper + 1e-6:
+				continue
+			feasible_share = 0.0 if total_removed_target <= EPS else upper / total_removed_target
+			trimmed_share_total += max(0.0, shares[src] - feasible_share)
+			shares[src] = feasible_share
+
+		if trimmed_share_total > EPS:
+			while trimmed_share_total > EPS:
+				best_region = None
+				best_slack = -1.0
+				for dst in sorted(region_ids):
+					upper_share = (
+						0.0
+						if total_removed_target <= EPS
+						else region_uppers[dst] / total_removed_target
+					)
+					slack = upper_share - shares[dst]
+					if slack > best_slack + EPS:
+						best_region = dst
+						best_slack = slack
+
+				if best_region is None or best_slack <= EPS:
+					raise ValueError(
+						"Infeasible generation_war_damages configuration: unable to redistribute "
+						"trimmed regional share because no region has remaining slack."
+					)
+
+				delta = min(trimmed_share_total, max(0.0, best_slack))
+				shares[best_region] += delta
+				trimmed_share_total -= delta
+
+		region_lowers = {
+			r: max(0.0, shares[r] * total_removed_target)
+			for r in region_ids
+		}
+
+		trial = _solve_bipartite_with_region_bounds(
+			group_names=group_names,
+			region_ids=region_ids,
+			group_targets=group_targets,
+			region_lowers=region_lowers,
+			region_uppers=region_uppers,
+			cell_caps=cell_caps,
+		)
+		if trial is not None:
+			break
+
+		# If still infeasible, identify regions with infeasible lower bounds under coupled carrier constraints.
+		infeasible = []
+		for src in sorted(region_ids):
+			current_low = region_lowers[src]
+			if current_low <= EPS:
+				continue
+			max_low = _max_feasible_lower_for_region(
+				group_names=group_names,
+				region_ids=region_ids,
+				group_targets=group_targets,
+				region_lowers=region_lowers,
+				region_uppers=region_uppers,
+				cell_caps=cell_caps,
+				target_region=src,
+			)
+			if max_low + 1e-6 < current_low:
+				infeasible.append((src, max_low))
+
+		if not infeasible:
+			raise ValueError(
+				"Infeasible generation_war_damages configuration: bounded-flow remains infeasible "
+				"after regional share repair, but no trim candidates were identified."
+			)
+
+		trimmed_share_total = 0.0
+		for src, max_low in infeasible:
+			new_share = 0.0 if total_removed_target <= EPS else max_low / total_removed_target
+			if shares[src] > new_share + EPS:
+				trimmed_share_total += shares[src] - new_share
+				shares[src] = new_share
+
+		while trimmed_share_total > EPS:
+			best_region = None
+			best_slack = -1.0
+			for dst in sorted(region_ids):
+				upper_share = (
+					0.0
+					if total_removed_target <= EPS
+					else region_uppers[dst] / total_removed_target
+				)
+				slack = upper_share - shares[dst]
+				if slack > best_slack + EPS:
+					best_region = dst
+					best_slack = slack
+
+			if best_region is None or best_slack <= EPS:
+				raise ValueError(
+					"Infeasible generation_war_damages configuration: unable to redistribute "
+					"trimmed regional share because no region has remaining slack."
+				)
+
+			delta = min(trimmed_share_total, max(0.0, best_slack))
+			shares[best_region] += delta
+			trimmed_share_total -= delta
+
+		iteration += 1
+
+	share_sum = sum(shares.values())
+	if not _nearly_equal(share_sum, 1.0, tol=1e-6):
+		raise ValueError(
+			"Internal share-repair error: repaired damage_distribution shares do not sum "
+			f"to 1.0 (got {share_sum:.8f})."
+		)
+
+	return shares
+
+
 def main(snakemake):
 	n = pypsa.Network(snakemake.input["network"])
 
@@ -229,38 +412,55 @@ def main(snakemake):
 		cfg.get("damage_percentage_by_carrier", {}),
 	)
 	damage_distribution = _coerce_mapping(
-		"generation_war_damages.damage_distribution",
-		cfg.get("damage_distribution", {}),
+		"generation_war_damages.preferred_damage_distribution",
+		cfg.get("preferred_damage_distribution", {}),
 	)
 
 	if not damage_by_carrier:
 		raise ValueError("generation_war_damages.damage_percentage_by_carrier is empty")
 	if not damage_distribution:
-		raise ValueError("generation_war_damages.damage_distribution is empty")
+		raise ValueError("generation_war_damages.preferred_damage_distribution is empty")
 
 	region_shares = {}
 	for region_id, share in damage_distribution.items():
 		share = float(share)
-		_validate_fraction(f"generation_war_damages.damage_distribution.{region_id}", share)
+		_validate_fraction(f"generation_war_damages.preferred_damage_distribution.{region_id}", share)
 		region_shares[str(region_id)] = share
 
 	distribution_sum = sum(region_shares.values())
 	if not _nearly_equal(distribution_sum, 1.0, tol=1e-6):
 		raise ValueError(
-			"generation_war_damages.damage_distribution values must sum to 1.0 "
+			"generation_war_damages.preferred_damage_distribution values must sum to 1.0 "
 			f"(got {distribution_sum:.8f})"
 		)
 
 	generators = n.generators.copy()
-	if generators.empty:
+	storage_units = n.storage_units.copy()
+	if generators.empty and storage_units.empty:
 		n.export_to_netcdf(snakemake.output["network"])
 		raise SystemExit()
 
-	carriers_norm = generators["carrier"].map(_normalize_token)
+	if "carrier" not in generators.columns or "bus" not in generators.columns or "p_nom" not in generators.columns:
+		raise ValueError("Network generators must include carrier/bus/p_nom columns")
+	if "carrier" not in storage_units.columns or "bus" not in storage_units.columns or "p_nom" not in storage_units.columns:
+		raise ValueError("Network storage_units must include carrier/bus/p_nom columns")
+
+	gen_carriers_norm = generators["carrier"].map(_normalize_token)
+	storage_carriers_norm = storage_units["carrier"].map(_normalize_token)
+
+	component_tables = {
+		"generator": generators,
+		"storage_unit": storage_units,
+	}
+	component_carriers = {
+		"generator": gen_carriers_norm,
+		"storage_unit": storage_carriers_norm,
+	}
 
 	group_targets = {}
 	group_members = {}
 	group_labels = {}
+	group_component = {}
 
 	for raw_group_name, share in damage_by_carrier.items():
 		share = float(share)
@@ -271,38 +471,45 @@ def main(snakemake):
 
 		group_key = _normalize_token(raw_group_name)
 		aliases = GROUP_ALIASES.get(group_key, {group_key})
+		component = "storage_unit" if group_key in STORAGEUNIT_GROUPS else "generator"
+		table = component_tables[component]
+		carriers_norm = component_carriers[component]
 
 		mask = carriers_norm.isin(aliases)
-		group_gen = generators.index[mask]
-		total_cap = float(generators.loc[group_gen, "p_nom"].clip(lower=0.0).sum())
+		group_assets = table.index[mask]
+		total_cap = float(table.loc[group_assets, "p_nom"].clip(lower=0.0).sum())
 		target_remove = share * total_cap
 
 		if target_remove > EPS and total_cap <= EPS:
 			raise ValueError(
-				f"Carrier group '{raw_group_name}' has positive damage share ({share}) "
+				f"Carrier group '{raw_group_name}' has positive damage share ({share}) in "
+				f"{component} domain "
 				"but no installed capacity in the network"
 			)
 
 		group_targets[group_key] = target_remove
-		group_members[group_key] = set(group_gen)
+		group_members[group_key] = set(group_assets)
 		group_labels[group_key] = raw_group_name
+		group_component[group_key] = component
 
 	positive_groups = [g for g, t in group_targets.items() if t > EPS]
 	if not positive_groups:
 		n.export_to_netcdf(snakemake.output["network"])
 		raise SystemExit()
 
-	# Ensure no generator belongs to more than one configured positive-damage group.
+	# Ensure no asset belongs to more than one configured positive-damage group in its component domain.
 	seen = {}
 	for g in positive_groups:
 		for gen_id in group_members[g]:
-			if gen_id in seen:
+			asset_key = (group_component[g], gen_id)
+			if asset_key in seen:
+				comp_label = "storage_unit" if group_component[g] == "storage_unit" else "generator"
 				raise ValueError(
-					"Overlapping carrier mapping detected: generator "
-					f"'{gen_id}' matches both '{group_labels[seen[gen_id]]}' "
+					f"Overlapping carrier mapping detected in {comp_label}: asset "
+					f"'{gen_id}' matches both '{group_labels[seen[asset_key]]}' "
 					f"and '{group_labels[g]}'. Adjust aliases or config keys."
 				)
-			seen[gen_id] = g
+			seen[asset_key] = g
 
 	bus_to_region = _bus_region_mapping(
 		network=n,
@@ -312,19 +519,28 @@ def main(snakemake):
 
 	gen_region = generators["bus"].map(bus_to_region)
 	gen_region = gen_region.where(gen_region.notna(), None)
+	storage_region = storage_units["bus"].map(bus_to_region)
+	storage_region = storage_region.where(storage_region.notna(), None)
+	component_regions = {
+		"generator": gen_region,
+		"storage_unit": storage_region,
+	}
 
 	cell_caps = defaultdict(float)
-	cell_generators = defaultdict(list)
+	cell_assets = defaultdict(list)
 
 	for g in positive_groups:
+		component = group_component[g]
+		table = component_tables[component]
+		asset_region = component_regions[component]
 		for gen_id in sorted(group_members[g]):
-			cap = float(max(0.0, generators.at[gen_id, "p_nom"]))
+			cap = float(max(0.0, table.at[gen_id, "p_nom"]))
 			if cap <= EPS:
 				continue
-			region = gen_region.get(gen_id)
+			region = asset_region.get(gen_id)
 			if region in region_shares:
 				cell_caps[(g, region)] += cap
-				cell_generators[(g, region)].append(gen_id)
+				cell_assets[(g, region)].append((component, gen_id))
 
 	region_ids = sorted(region_shares.keys())
 	total_removed_target = sum(group_targets[g] for g in positive_groups)
@@ -343,45 +559,41 @@ def main(snakemake):
 
 	# Compute regional capacities and identify zero-capacity regions
 	region_caps = {}
+	region_upper_limits = {}
 	for r in region_ids:
-		cap = sum(cell_caps.get((g, r), 0.0) for g in positive_groups)
-		region_caps[r] = cap
+		region_cap = sum(cell_caps.get((g, r), 0.0) for g in positive_groups)
+		region_caps[r] = region_cap
+		region_upper_limits[r] = sum(
+			min(cell_caps.get((g, r), 0.0), group_targets[g]) for g in positive_groups
+		)
 
-	# Identify zero-capacity regions and renormalize shares
-	zero_cap_regions = [r for r in region_ids if region_caps[r] <= EPS]
-	if zero_cap_regions:
-		zero_share = sum(region_shares[r] for r in zero_cap_regions)
-		remaining_share = 1.0 - zero_share
+	if all(region_upper_limits[r] <= EPS for r in region_ids):
+		raise ValueError(
+			"All configured damage_distribution regions have zero installed capacity "
+			"for targeted carriers. Cannot proceed."
+		)
 
-		if remaining_share <= EPS:
-			raise ValueError(
-				"All configured damage_distribution regions have zero installed capacity "
-				"for targeted carriers. Cannot proceed."
-			)
-
-		# Renormalize remaining regions
-		for r in region_ids:
-			if region_caps[r] > EPS:
-				region_shares[r] = region_shares[r] / remaining_share
-
-		# Filter out zero-capacity regions
-		region_ids = [r for r in region_ids if region_caps[r] > EPS]
-
-		print(f"[generation_war_damages] Removed zero-capacity regions: {zero_cap_regions}")
-		print(f"[generation_war_damages] Renormalized damage_distribution shares")
+	region_shares = _repair_region_shares_with_slack(
+		group_names=positive_groups,
+		region_ids=region_ids,
+		group_targets=group_targets,
+		region_shares=region_shares,
+		total_removed_target=total_removed_target,
+		region_uppers=region_upper_limits,
+		cell_caps=cell_caps,
+	)
 
 	region_lowers = {}
 	region_uppers = {}
 	for r in region_ids:
 		cap = region_caps[r]
-		low = max(0.0, (region_shares[r] - REGIONAL_SHARE_TOLERANCE) * total_removed_target)
-		high = min(total_removed_target, (region_shares[r] + REGIONAL_SHARE_TOLERANCE) * total_removed_target)
-		high = min(high, cap)
+		low = max(0.0, region_shares[r] * total_removed_target)
+		high = min(total_removed_target, cap)
 
-		if low > cap + 1e-6:
+		if low > high + 1e-6:
 			raise ValueError(
-				f"Infeasible regional lower bound for '{r}': lower={low:.6f} MW, "
-				f"available={cap:.6f} MW."
+				f"Infeasible regional bounds for '{r}' after share repair: "
+				f"lower={low:.6f} MW, upper={high:.6f} MW."
 			)
 
 		region_lowers[r] = low
@@ -411,10 +623,11 @@ def main(snakemake):
 	if flows is None:
 		raise ValueError(
 			"Infeasible generation_war_damages configuration: cannot satisfy carrier-level "
-			"damage totals and regional distribution within configured tolerance."
+			"damage totals and repaired regional distribution."
 		)
 
-	reductions = defaultdict(float)
+	gen_reductions = defaultdict(float)
+	storage_reductions = defaultdict(float)
 	for g in positive_groups:
 		for r in region_ids:
 			planned = flows.get((g, r), 0.0)
@@ -422,8 +635,10 @@ def main(snakemake):
 				continue
 
 			remaining = planned
-			for gen_id in cell_generators.get((g, r), []):
-				avail = float(max(0.0, generators.at[gen_id, "p_nom"] - reductions[gen_id]))
+			for component, gen_id in cell_assets.get((g, r), []):
+				table = component_tables[component]
+				reductions = storage_reductions if component == "storage_unit" else gen_reductions
+				avail = float(max(0.0, table.at[gen_id, "p_nom"] - reductions[gen_id]))
 				if avail <= EPS:
 					continue
 				cut = min(avail, remaining)
@@ -438,12 +653,17 @@ def main(snakemake):
 					f"for group '{group_labels[g]}' in region '{r}' (remaining={remaining:.6f} MW)."
 				)
 
-	for gen_id, cut in reductions.items():
+	for gen_id, cut in gen_reductions.items():
 		new_cap = float(generators.at[gen_id, "p_nom"] - cut)
 		generators.at[gen_id, "p_nom"] = max(0.0, new_cap)
+	for su_id, cut in storage_reductions.items():
+		new_cap = float(storage_units.at[su_id, "p_nom"] - cut)
+		storage_units.at[su_id, "p_nom"] = max(0.0, new_cap)
 
 	# Validate carrier totals.
 	for g in positive_groups:
+		component = group_component[g]
+		reductions = storage_reductions if component == "storage_unit" else gen_reductions
 		removed = sum(reductions[gen_id] for gen_id in group_members[g])
 		if abs(removed - group_targets[g]) > max(1e-5, 1e-6 * group_targets[g]):
 			raise ValueError(
@@ -451,23 +671,27 @@ def main(snakemake):
 				f"removed {removed:.6f} MW vs target {group_targets[g]:.6f} MW"
 			)
 
-	# Validate regional shares with tolerance.
+	# Validate regional shares after repair.
 	region_removed = {r: 0.0 for r in region_ids}
-	for gen_id, cut in reductions.items():
+	for gen_id, cut in gen_reductions.items():
 		region = gen_region.get(gen_id)
+		if region in region_removed:
+			region_removed[region] += cut
+	for su_id, cut in storage_reductions.items():
+		region = storage_region.get(su_id)
 		if region in region_removed:
 			region_removed[region] += cut
 
 	for r in region_ids:
 		share = region_removed[r] / total_removed_target
-		diff = abs(share - region_shares[r])
-		if diff > REGIONAL_SHARE_TOLERANCE + 1e-9:
+		if abs(share - region_shares[r]) > 1e-5:
 			raise ValueError(
-				f"Regional distribution mismatch for '{r}': share={share:.6f}, "
-				f"target={region_shares[r]:.6f}, tolerance={REGIONAL_SHARE_TOLERANCE:.6f}"
+				f"Regional distribution mismatch for '{r}' after share repair: "
+				f"share={share:.6f}, target={region_shares[r]:.6f}"
 			)
 
 	n.generators["p_nom"] = generators["p_nom"]
+	n.storage_units["p_nom"] = storage_units["p_nom"]
 	n.consistency_check()
 	n.export_to_netcdf(snakemake.output["network"])
 

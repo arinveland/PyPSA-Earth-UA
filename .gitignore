@@ -1,6 +1,7 @@
 *.log
-Files/testing.ipynb
+Files/*.ipynb
 pruned_damages.nc
 pruned.nc
 pruned_loads.nc
 .snakemake
+*.csv
