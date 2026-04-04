@@ -11,7 +11,7 @@ drop_occupied:
 
 generation_war_damages:
   enable: true
-  damage_percentage_by_carrier: [ 
+  damage_percentage_by_carrier: [ # Values should be between 0 and 1
     nuclear: 0, # Occupied infrastructure is handled by a separate rule
     thermal: 0.89,
     CCGT: 0.51,
@@ -19,8 +19,8 @@ generation_war_damages:
     PHS: 0.17,
     wind: 0,
     solar: 0,
-  ] # Current values are based on eye measurements from a figure where the shares were not marked explicitly, needs to be verified more thoroughly
-  preferred_damage_distribution: [
+  ]
+  preferred_damage_distribution: [ # Values should add up to 1
     UA.5_1: 0.21, # Dnipropetrovsk
     UA.8_1: 0.11, # Kharkiv
     UA.21_1: 0.05, # Sumy
@@ -42,12 +42,12 @@ generation_war_damages:
     UA.3_1: 0.01, # Chernivtsi
     UA.25_1: 0.0, # Volyn
     UA.23_1: 0.00, # Zakarpattia
-  ] # Values should add up to 1
+  ] 
 
 load_adjustment:
   enable: true
 
-  base_industrial_loads: [ 
+  base_industrial_loads: [ # Values are in TWh
     UA.5_1: 22.01, # Dnipropetrovsk
     UA.8_1: 3.6, # Kharkiv
     UA.21_1: 1.20, # Sumy
@@ -69,9 +69,9 @@ load_adjustment:
     UA.3_1: 1.90, # Chernivtsi
     UA.25_1: 0.68, # Volyn
     UA.23_1: 0.44, # Zakarpattia
-  ] # Values are in TWh
+  ] 
 
-  industrial_adjustment_coefficients: [
+  industrial_adjustment_coefficients: [ # Coefficients used to adjust the base industrial loads
     UA.5_1: 0.53, # Dnipropetrovsk
     UA.8_1: 0.50, # Kharkiv
     UA.21_1: 0.51, # Sumy
@@ -93,9 +93,9 @@ load_adjustment:
     UA.3_1: 0.78, # Chernivtsi
     UA.25_1: 0.80, # Volyn
     UA.23_1: 0.68, # Zakarpattia
-  ] # Coefficients used to adjust the base industrial loads
+  ] 
 
-  population_adjustment_coefficients: [
+  population_adjustment_coefficients: [ # Coefficients used to adjust the base household loads
     UA.5_1: 1.10, # Dnipropetrovsk
     UA.8_1: 0.96, # Kharkiv
     UA.21_1: 1.00, # Sumy
@@ -117,7 +117,7 @@ load_adjustment:
     UA.3_1: 1.12, # Chernivtsi
     UA.25_1: 1.04, # Volyn
     UA.23_1: 1.2, # Zakarpattia
-  ] # Coefficients used to adjust the base household loads
+  ] 
 
 cross_border:
   enable: false
