@@ -1,4 +1,3 @@
-**This is a work in progress. Trying to run this in its current state will not produce any meaningful results**
 # Running the model
 
 ## Installing Dependencies
@@ -34,5 +33,19 @@ To deactivate the environment, run the following command in your terminal:
 conda deactivate
 ```
 
-## Choosing a solver
-The following open source solvers are pre-installed in the PyPSA-Earth environment: GLPK, WinGLPK, HiGHS. Gurobi is also pre-installed, but you must provide your own licence to use it.
+## Choose a solver
+The following open source solvers are pre-installed in the PyPSA-Earth environment: GLPK, WinGLPK, HiGHS. Gurobi is also pre-installed, but you must provide your own licence to use it. By default, the scripts in this workflow try Gurobi and HiGHS first, as these are the most capable ones. This can be changed by altering the CANDIDATE_SOLVERS list in the scripts.
+
+## Add infrastructure attack data
+This should be added on csv format to the Files folder. As a suggestion, ACLED has a dataset sourced from open media reports that they are often willing to share with serious researchers (https://acleddata.com/monitor/ukraine-conflict-monitor).
+
+## Run the model
+To run any of the snakemake jobs in the workflow, use the command:
+
+```console
+snakemake -j [cores] [job_name]
+```
+
+Where cores is the number of provided cores, and job_name is the name of the snakemake job you want to run (ua_scenario_analysis to run a scenario). Other jobs will then be run as required based on which inputs already exist.
+
+This model is quite computationally heavy, espeacially when run over a long time horizon, so it is recommended to run it on a HPC cluster.

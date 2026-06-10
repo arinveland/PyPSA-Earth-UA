@@ -57,6 +57,13 @@ def _bus_region_mapping(network, gadm_path, configured_regions):
 	joined = joined.sort_values(["bus_id", "GADM_ID"], na_position="last")
 	joined = joined.drop_duplicates(subset=["bus_id"], keep="first")
 
+	unmapped = joined["GADM_ID"].isna()
+	if unmapped.any():
+		for idx in joined.index[unmapped]:
+			pt = buses_gdf.loc[joined.loc[idx, "bus_id"], "geometry"]
+			distances = gadm.geometry.distance(pt)
+			joined.loc[idx, "GADM_ID"] = gadm.loc[distances.idxmin(), "GADM_ID"]
+
 	return dict(zip(joined["bus_id"], joined["GADM_ID"]))
 
 

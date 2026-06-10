@@ -1,7 +1,12 @@
 *.log
-Files/*.ipynb
-pruned_damages.nc
+results/
 pruned.nc
 pruned_loads.nc
+base_reference.nc
+xborder.nc
+elec.nc
 .snakemake
 *.csv
+*.ipynb
+.claude
+.venv
