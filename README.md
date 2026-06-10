@@ -33,13 +33,16 @@ To deactivate the environment, run the following command in your terminal:
 conda deactivate
 ```
 
-## Choose a solver
+## Choose a Solver
 The following open source solvers are pre-installed in the PyPSA-Earth environment: GLPK, WinGLPK, HiGHS. Gurobi is also pre-installed, but you must provide your own licence to use it. By default, the scripts in this workflow try Gurobi and HiGHS first, as these are the most capable ones. This can be changed by altering the CANDIDATE_SOLVERS list in the scripts.
 
-## Add infrastructure attack data
+## Add Infrastructure Attack Data
 This should be added on csv format to the Files folder. As a suggestion, ACLED has a dataset sourced from open media reports that they are often willing to share with serious researchers (https://acleddata.com/monitor/ukraine-conflict-monitor).
 
-## Run the model
+## Configure a Scenario
+Configure a scenario by setting parameters in the config.yaml file.
+
+## Run the Model
 To run any of the snakemake jobs in the workflow, use the command:
 
 ```console
